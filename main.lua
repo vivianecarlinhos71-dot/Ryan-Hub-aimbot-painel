@@ -1,4 +1,11 @@
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+-- Carregamento Seguro do Rayfield com fallback
+local success, Rayfield = pcall(function()
+    return loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
+end)
+
+if not success or not Rayfield then
+    Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+end
 
 local Window = Rayfield:CreateWindow({
    Name = "FPS GOD | Delta V3 Mobile",
@@ -9,11 +16,10 @@ local Window = Rayfield:CreateWindow({
 -- Variáveis de Configuração
 local Settings = {
     Aimbot = false,
-    ShootLock = false, -- Grudar Apenas ao Atirar
     AutoShot = false,
     Tracers = false,
     ESP = false,
-    HologramESP = false, -- ESP Holograma (Baseado em Armas)
+    HologramESP = false,
     HealthESP = false,
     DistanceESP = false,
     NoRecoil = false,
@@ -35,62 +41,21 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local CurrentTarget = nil 
 
--- Sistema preciso de detecção de tiro no Mobile
-local IsShooting = false
-
--- Detecta quando a arma está sendo ativada (tiro pressionado)
-local function MonitorTool(character)
-    if not character then return end
-    
-    character.ChildAdded:Connect(function(child)
-        if child:IsA("Tool") then
-            child.Activated:Connect(function()
-                IsShooting = true
-            end)
-            child.Deactivated:Connect(function()
-                IsShooting = false
-            end)
-        end
-    end)
-    
-    local currentTool = character:FindFirstChildOfClass("Tool")
-    if currentTool then
-        currentTool.Activated:Connect(function()
-            IsShooting = true
-        end)
-        currentTool.Deactivated:Connect(function()
-            IsShooting = false
-        end)
-    end
-end
-
-if LocalPlayer.Character then
-    MonitorTool(LocalPlayer.Character)
-end
-
-LocalPlayer.CharacterAdded:Connect(function(char)
-    IsShooting = false
-    MonitorTool(char)
-end)
-
--- Função para verificar se o jogador tem arma equipada na mão ou guardada nas costas
+-- Função para verificar se o jogador tem arma
 local function HasWeaponEquippedOrOnBack(character)
     if not character then return false end
 
-    -- 1. Verifica se tem Tool na mão do personagem
     for _, child in pairs(character:GetChildren()) do
         if child:IsA("Tool") then
             return true
         end
     end
 
-    -- 2. Verifica no Backpack do jogador
     local player = game.Players:GetPlayerFromCharacter(character)
     if player and player:FindFirstChild("Backpack") and #player.Backpack:GetChildren() > 0 then
         return true
     end
 
-    -- 3. Verifica se tem modelo/acessório de arma nas costas ou no corpo
     for _, part in pairs(character:GetDescendants()) do
         if part:IsA("Model") or part:IsA("Accessory") or part:IsA("Tool") then
             local name = part.Name:lower()
@@ -103,37 +68,44 @@ local function HasWeaponEquippedOrOnBack(character)
     return false
 end
 
--- === SISTEMA DA MIRA ESTILO FREE FIRE ===
-local CrosshairCenter = Drawing.new("Circle")
-CrosshairCenter.Filled = true
-CrosshairCenter.Radius = 2
-CrosshairCenter.Color = Color3.fromRGB(255, 0, 0)
-CrosshairCenter.Transparency = 1
-CrosshairCenter.Visible = true
+-- === SISTEMA DA MIRA ===
+local CrosshairCenter, CrosshairOuter
+pcall(function()
+    CrosshairCenter = Drawing.new("Circle")
+    CrosshairCenter.Filled = true
+    CrosshairCenter.Radius = 2
+    CrosshairCenter.Color = Color3.fromRGB(255, 0, 0)
+    CrosshairCenter.Transparency = 1
+    CrosshairCenter.Visible = true
 
-local CrosshairOuter = Drawing.new("Circle")
-CrosshairOuter.Filled = false
-CrosshairOuter.Radius = 8 
-CrosshairOuter.Thickness = 1.5
-CrosshairOuter.Color = Color3.fromRGB(255, 0, 0)
-CrosshairOuter.Transparency = 0.8
-CrosshairOuter.Visible = true
+    CrosshairOuter = Drawing.new("Circle")
+    CrosshairOuter.Filled = false
+    CrosshairOuter.Radius = 8 
+    CrosshairOuter.Thickness = 1.5
+    CrosshairOuter.Color = Color3.fromRGB(255, 0, 0)
+    CrosshairOuter.Transparency = 0.8
+    CrosshairOuter.Visible = true
+end)
 
 local function UpdateCrosshair()
-    local CenterPosition = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    CrosshairCenter.Position = CenterPosition
-    CrosshairOuter.Position = CenterPosition
+    if CrosshairCenter and CrosshairOuter then
+        local CenterPosition = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        CrosshairCenter.Position = CenterPosition
+        CrosshairOuter.Position = CenterPosition
+    end
 end
--- =====================================================
 
 -- UI do Contador de Players
-local PlayerCountLabel = Drawing.new("Text")
-PlayerCountLabel.Visible = false
-PlayerCountLabel.Size = 25
-PlayerCountLabel.Center = true
-PlayerCountLabel.Outline = true
-PlayerCountLabel.Position = Vector2.new(Camera.ViewportSize.X / 2, 50)
-PlayerCountLabel.Color = Color3.fromRGB(255, 0, 0)
+local PlayerCountLabel
+pcall(function()
+    PlayerCountLabel = Drawing.new("Text")
+    PlayerCountLabel.Visible = false
+    PlayerCountLabel.Size = 25
+    PlayerCountLabel.Center = true
+    PlayerCountLabel.Outline = true
+    PlayerCountLabel.Position = Vector2.new(Camera.ViewportSize.X / 2, 50)
+    PlayerCountLabel.Color = Color3.fromRGB(255, 0, 0)
+end)
 
 -- Pulo Infinito
 UserInputService.JumpRequest:Connect(function()
@@ -142,7 +114,7 @@ UserInputService.JumpRequest:Connect(function()
         if character then
             local humanoid = character:FindFirstChildOfClass("Humanoid")
             if humanoid then
-                humanoid:ChangeState("Jumping")
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
             end
         end
     end
@@ -159,18 +131,21 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Círculo do FOV (Configurado em VERDE)
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Thickness = 1.5
-FOVCircle.Color = Color3.fromRGB(0, 255, 0)
-FOVCircle.Transparency = 0.7
-FOVCircle.Filled = false
-FOVCircle.Visible = true
+-- Círculo do FOV
+local FOVCircle
+pcall(function()
+    FOVCircle = Drawing.new("Circle")
+    FOVCircle.Thickness = 1.5
+    FOVCircle.Color = Color3.fromRGB(0, 255, 0)
+    FOVCircle.Transparency = 0.7
+    FOVCircle.Filled = false
+    FOVCircle.Visible = true
+end)
 
--- Função Raio-X (Wallhack)
+-- Função Raio-X
 local function ApplyXray()
     for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and not obj:IsDescendantOf(game.Players.LocalPlayer.Character) then
+        if obj:IsA("BasePart") and LocalPlayer.Character and not obj:IsDescendantOf(LocalPlayer.Character) then
             if Settings.Xray then
                 if not obj:GetAttribute("OriginalTransparency") then
                     obj:SetAttribute("OriginalTransparency", obj.Transparency)
@@ -180,6 +155,7 @@ local function ApplyXray()
                 local original = obj:GetAttribute("OriginalTransparency")
                 if original then
                     obj.Transparency = original
+                    obj:SetAttribute("OriginalTransparency", nil)
                 end
             end
         end
@@ -189,20 +165,31 @@ end
 -- Sistema de WallCheck
 local function IsVisible(part, character)
     if not Settings.WallCheck then return true end
+    if not part or not character then return false end
     
     local Origin = Camera.CFrame.Position
-    local Direction = part.Position - Origin
+    local Destination = part.Position
+    local Direction = Destination - Origin
     
     local raycastParams = RaycastParams.new()
-    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, character}
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, character, Camera}
     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
     raycastParams.IgnoreWater = true
     
     local raycastResult = workspace:Raycast(Origin, Direction, raycastParams)
-    return raycastResult == nil
+    
+    if raycastResult then
+        local hitPart = raycastResult.Instance
+        if hitPart and (not hitPart.CanCollide or hitPart.Transparency >= 0.7) then
+            return true
+        end
+        return false
+    end
+    
+    return true
 end
 
--- Função de Validação do Alvo Atual
+-- Validação de Alvo
 local function IsValidTarget(part)
     if not part or not part.Parent then return false end
     local character = part.Parent
@@ -221,7 +208,7 @@ local function IsValidTarget(part)
     return false
 end
 
--- Aimbot Inteligente com Trava (Lock)
+-- Aimbot
 local function GetClosestPlayer()
     if CurrentTarget and IsValidTarget(CurrentTarget) then
         return CurrentTarget
@@ -236,11 +223,12 @@ local function GetClosestPlayer()
             local hum = v.Character:FindFirstChildOfClass("Humanoid")
             if hum and hum.Health > 0 then 
                 if Settings.TeamCheck and v.Team == LocalPlayer.Team then continue end
-                local pos, onScreen = Camera:WorldToViewportPoint(v.Character[Settings.AimPart].Position)
+                local part = v.Character[Settings.AimPart]
+                local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
                 local distance = (Vector2.new(pos.X, pos.Y) - CenterScreen).Magnitude
-                if distance < Settings.FOV and onScreen and IsVisible(v.Character[Settings.AimPart], v.Character) then
+                if distance < Settings.FOV and onScreen and IsVisible(part, v.Character) then
                     if distance < shortestDistance then
-                        target = v.Character[Settings.AimPart]
+                        target = part
                         shortestDistance = distance
                     end
                 end
@@ -252,136 +240,138 @@ local function GetClosestPlayer()
     return target
 end
 
---- SISTEMA DE ESP COMPLETO ---
+-- Sistema de ESP
 local function CreateESP(player)
-    local Box = Drawing.new("Square")
-    Box.Visible = false
-    Box.Color = Color3.fromRGB(255, 0, 0)
-    Box.Thickness = 1.5
-    Box.Filled = false
+    local Box, Tracer, HealthBox, DistanceLabel
+    pcall(function()
+        Box = Drawing.new("Square")
+        Box.Visible = false
+        Box.Color = Color3.fromRGB(255, 0, 0)
+        Box.Thickness = 1.5
+        Box.Filled = false
 
-    local Tracer = Drawing.new("Line")
-    Tracer.Visible = false
-    Tracer.Color = Color3.fromRGB(255, 255, 0) 
-    Tracer.Thickness = 1.5
+        Tracer = Drawing.new("Line")
+        Tracer.Visible = false
+        Tracer.Color = Color3.fromRGB(255, 255, 0) 
+        Tracer.Thickness = 1.5
 
-    local HealthBox = Drawing.new("Square")
-    HealthBox.Visible = false
-    HealthBox.Thickness = 1
-    HealthBox.Color = Color3.fromRGB(0, 255, 0) 
-    HealthBox.Filled = true 
+        HealthBox = Drawing.new("Square")
+        HealthBox.Visible = false
+        HealthBox.Thickness = 1
+        HealthBox.Color = Color3.fromRGB(0, 255, 0) 
+        HealthBox.Filled = true 
 
-    local DistanceLabel = Drawing.new("Text")
-    DistanceLabel.Visible = false
-    DistanceLabel.Color = Color3.fromRGB(255, 255, 255)
-    DistanceLabel.Size = 14
-    DistanceLabel.Center = true
-    DistanceLabel.Outline = true
+        DistanceLabel = Drawing.new("Text")
+        DistanceLabel.Visible = false
+        DistanceLabel.Color = Color3.fromRGB(255, 255, 255)
+        DistanceLabel.Size = 14
+        DistanceLabel.Center = true
+        DistanceLabel.Outline = true
+    end)
 
-    local function SetupCharacter(character)
-        if not character then return end
+    if not Box then return end
 
-        local function Update()
-            local Connection
-            Connection = RunService.RenderStepped:Connect(function()
-                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Parent ~= nil then
-                    local Char = player.Character
-                    local RootPart = Char.HumanoidRootPart
-                    local Humanoid = Char.Humanoid
-                    local pos, onScreen = Camera:WorldToViewportPoint(RootPart.Position)
+    local Connection
+    Connection = RunService.RenderStepped:Connect(function()
+        if not player or not player.Parent then
+            pcall(function()
+                Box:Remove()
+                Tracer:Remove()
+                HealthBox:Remove()
+                DistanceLabel:Remove()
+            end)
+            Connection:Disconnect()
+            return
+        end
 
-                    -- Gerenciamento do ESP Holograma (Corpo e Arma)
-                    local Highlight = Char:FindFirstChild("HologramESP")
-                    local hasWeapon = HasWeaponEquippedOrOnBack(Char)
+        local char = player.Character
+        if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
+            local RootPart = char.HumanoidRootPart
+            local Humanoid = char.Humanoid
+            local pos, onScreen = Camera:WorldToViewportPoint(RootPart.Position)
 
-                    if Settings.HologramESP and hasWeapon then
-                        if not Highlight then
-                            Highlight = Instance.new("Highlight")
-                            Highlight.Name = "HologramESP"
-                            Highlight.FillColor = Color3.fromRGB(0, 255, 255) -- Ciano Holográfico
-                            Highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-                            Highlight.FillTransparency = 0.4
-                            Highlight.OutlineTransparency = 0
-                            Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                            Highlight.Adornee = Char
-                            Highlight.Parent = Char
-                        end
-                        Highlight.Enabled = true
-                    else
-                        if Highlight then
-                            Highlight.Enabled = false
-                        end
-                    end
+            local Highlight = char:FindFirstChild("HologramESP")
+            local hasWeapon = HasWeaponEquippedOrOnBack(char)
 
-                    if onScreen then
-                        if Settings.Tracers then
-                            Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-                            Tracer.To = Vector2.new(pos.X, pos.Y)
-                            Tracer.Visible = true
-                        else
-                            Tracer.Visible = false
-                        end
+            if Settings.HologramESP and hasWeapon then
+                if not Highlight then
+                    Highlight = Instance.new("Highlight")
+                    Highlight.Name = "HologramESP"
+                    Highlight.FillColor = Color3.fromRGB(0, 255, 255)
+                    Highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    Highlight.FillTransparency = 0.4
+                    Highlight.OutlineTransparency = 0
+                    Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    Highlight.Adornee = char
+                    Highlight.Parent = char
+                end
+                Highlight.Enabled = true
+            else
+                if Highlight then
+                    Highlight.Enabled = false
+                end
+            end
 
-                        local TopWorld = (RootPart.CFrame * CFrame.new(0, 3, 0)).Position
-                        local BottomWorld = (RootPart.CFrame * CFrame.new(0, -3.5, 0)).Position
-                        
-                        local TopLeft, onScreenTop = Camera:WorldToViewportPoint(TopWorld)
-                        local BottomLeft, onScreenBottom = Camera:WorldToViewportPoint(BottomWorld)
+            if onScreen then
+                if Settings.Tracers then
+                    Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                    Tracer.To = Vector2.new(pos.X, pos.Y)
+                    Tracer.Visible = true
+                else
+                    Tracer.Visible = false
+                end
 
-                        local sizeY = math.abs(TopLeft.Y - BottomLeft.Y)
-                        local sizeX = sizeY * 0.6 
-                        local boxX = pos.X - sizeX / 2
-                        local boxY = TopLeft.Y
+                local TopWorld = (RootPart.CFrame * CFrame.new(0, 3, 0)).Position
+                local BottomWorld = (RootPart.CFrame * CFrame.new(0, -3.5, 0)).Position
+                
+                local TopLeft = Camera:WorldToViewportPoint(TopWorld)
+                local BottomLeft = Camera:WorldToViewportPoint(BottomWorld)
 
-                        if Settings.ESP then
-                            Box.Size = Vector2.new(sizeX, sizeY)
-                            Box.Position = Vector2.new(boxX, boxY)
-                            Box.Visible = true
-                        else
-                            Box.Visible = false
-                        end
+                local sizeY = math.abs(TopLeft.Y - BottomLeft.Y)
+                local sizeX = sizeY * 0.6 
+                local boxX = pos.X - sizeX / 2
+                local boxY = TopLeft.Y
 
-                        if Settings.HealthESP then
-                            local healthPercent = math.clamp(Humanoid.Health / Humanoid.MaxHealth, 0, 1)
-                            local barWidth = 3 
-                            
-                            HealthBox.Size = Vector2.new(barWidth, sizeY * healthPercent)
-                            HealthBox.Position = Vector2.new(boxX - (barWidth + 3), boxY + sizeY - (sizeY * healthPercent))
-                            HealthBox.Visible = true
-                        else
-                            HealthBox.Visible = false
-                        end
-
-                        if Settings.DistanceESP then
-                            local dist = math.floor((RootPart.Position - Camera.CFrame.Position).Magnitude)
-                            DistanceLabel.Text = "[" .. tostring(dist) .. "m]"
-                            DistanceLabel.Position = Vector2.new(pos.X, boxY - 16)
-                            DistanceLabel.Visible = true
-                        else
-                            DistanceLabel.Visible = false
-                        end
-                    else
-                        Box.Visible = false
-                        Tracer.Visible = false
-                        HealthBox.Visible = false
-                        DistanceLabel.Visible = false
-                    end
+                if Settings.ESP then
+                    Box.Size = Vector2.new(sizeX, sizeY)
+                    Box.Position = Vector2.new(boxX, boxY)
+                    Box.Visible = true
                 else
                     Box.Visible = false
-                    Tracer.Visible = false
-                    HealthBox.Visible = false
-                    DistanceLabel.Visible = false
-                    if not player.Parent then Connection:Disconnect() end
                 end
-            end)
-        end
-        coroutine.wrap(Update)()
-    end
 
-    if player.Character then
-        SetupCharacter(player.Character)
-    end
-    player.CharacterAdded:Connect(SetupCharacter)
+                if Settings.HealthESP then
+                    local healthPercent = math.clamp(Humanoid.Health / Humanoid.MaxHealth, 0, 1)
+                    local barWidth = 3 
+                    
+                    HealthBox.Size = Vector2.new(barWidth, sizeY * healthPercent)
+                    HealthBox.Position = Vector2.new(boxX - (barWidth + 3), boxY + sizeY - (sizeY * healthPercent))
+                    HealthBox.Visible = true
+                else
+                    HealthBox.Visible = false
+                end
+
+                if Settings.DistanceESP then
+                    local dist = math.floor((RootPart.Position - Camera.CFrame.Position).Magnitude)
+                    DistanceLabel.Text = "[" .. tostring(dist) .. "m]"
+                    DistanceLabel.Position = Vector2.new(pos.X, boxY - 16)
+                    DistanceLabel.Visible = true
+                else
+                    DistanceLabel.Visible = false
+                end
+            else
+                Box.Visible = false
+                Tracer.Visible = false
+                HealthBox.Visible = false
+                DistanceLabel.Visible = false
+            end
+        else
+            Box.Visible = false
+            Tracer.Visible = false
+            HealthBox.Visible = false
+            DistanceLabel.Visible = false
+        end
+    end)
 end
 
 for _, v in pairs(game.Players:GetPlayers()) do
@@ -391,29 +381,17 @@ game.Players.PlayerAdded:Connect(function(v)
     if v ~= LocalPlayer then CreateESP(v) end
 end)
 
--- === SISTEMA DE NO RECOIL UNIVERSAL ===
-local rawmt = getrawmetatable(game)
-local oldindex = rawmt.__index
-setreadonly(rawmt, false)
-
-rawmt.__index = newcclosure(function(self, key)
-    if Settings.NoRecoil and self == Camera and (key == "CFrame" or key == "CoordinateFrame") then
-        return oldindex(self, key)
-    end
-    return oldindex(self, key)
-end)
-setreadonly(rawmt, true)
--- =========================================================================
-
--- Loop Geral
+-- Loop Geral do Jogo
 RunService.RenderStepped:Connect(function()
     UpdateCrosshair() 
     
-    FOVCircle.Radius = Settings.FOV
-    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    FOVCircle.Visible = (Settings.FOV > 0)
+    if FOVCircle then
+        FOVCircle.Radius = Settings.FOV
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        FOVCircle.Visible = (Settings.FOV > 0)
+    end
 
-    if Settings.PlayerCounter then
+    if Settings.PlayerCounter and PlayerCountLabel then
         PlayerCountLabel.Text = "PLAYERS: " .. tostring(#game.Players:GetPlayers())
         PlayerCountLabel.Visible = true
         if Settings.RGB_Counter then
@@ -421,29 +399,20 @@ RunService.RenderStepped:Connect(function()
         else
             PlayerCountLabel.Color = Color3.fromRGB(255, 0, 0)
         end
-    else
+    elseif PlayerCountLabel then
         PlayerCountLabel.Visible = false
     end
 
     if Settings.Aimbot then
-        local canLock = true
-        if Settings.ShootLock and not IsShooting then
-            canLock = false
-        end
-
-        if canLock then
-            local target = GetClosestPlayer()
-            if target then 
-                Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position) 
-                if Settings.AutoShot then
-                    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
-                    if tool then tool:Activate() end
-                end
-            else
-                CurrentTarget = nil 
+        local target = GetClosestPlayer()
+        if target then 
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position) 
+            if Settings.AutoShot then
+                local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                if tool then tool:Activate() end
             end
         else
-            CurrentTarget = nil
+            CurrentTarget = nil 
         end
     else
         CurrentTarget = nil 
@@ -456,48 +425,39 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
---- Interface ---
-local Tab = Window:CreateTab("Combate", 4483362458)
+--- Interface (Rayfield) ---
 
-Tab:CreateToggle({
+-- 1. Aba de Combate
+local CombatTab = Window:CreateTab("Combate", 4483362458)
+
+CombatTab:CreateToggle({
    Name = "Ativar Aimbot",
    CurrentValue = false,
    Callback = function(Value) Settings.Aimbot = Value end,
 })
 
-Tab:CreateToggle({
-   Name = "Grudar Apenas ao Atirar (ShootLock)",
-   CurrentValue = false,
-   Callback = function(Value) Settings.ShootLock = Value end,
-})
-
-Tab:CreateToggle({
+CombatTab:CreateToggle({
     Name = "Verificar Paredes (WallCheck)",
     CurrentValue = true, 
     Callback = function(Value) Settings.WallCheck = Value end,
  })
 
-Tab:CreateToggle({
+CombatTab:CreateToggle({
     Name = "Tiro Automático",
     CurrentValue = false,
     Callback = function(Value) Settings.AutoShot = Value end,
  })
 
-Tab:CreateToggle({
-    Name = "No Recoil",
-    CurrentValue = false,
-    Callback = function(Value) Settings.NoRecoil = Value end,
- })
+-- 2. Aba Visual
+local VisualTab = Window:CreateTab("Visual", 4483362458)
 
-Tab:CreateSection("Visual (Estilo Painel)")
-
-Tab:CreateToggle({
+VisualTab:CreateToggle({
     Name = "ESP Holograma (Corpo + Armas)",
     CurrentValue = false,
     Callback = function(Value) Settings.HologramESP = Value end,
 })
 
-Tab:CreateToggle({
+VisualTab:CreateToggle({
     Name = "Raio-X (Wallhack)",
     CurrentValue = false,
     Callback = function(Value) 
@@ -506,65 +466,66 @@ Tab:CreateToggle({
     end,
 })
 
-Tab:CreateToggle({
+VisualTab:CreateToggle({
     Name = "Contador de Players",
     CurrentValue = false,
     Callback = function(Value) Settings.PlayerCounter = Value end,
 })
 
-Tab:CreateToggle({
+VisualTab:CreateToggle({
     Name = "Contador em RGB",
     CurrentValue = false,
     Callback = function(Value) Settings.RGB_Counter = Value end,
 })
 
-Tab:CreateToggle({
+VisualTab:CreateToggle({
    Name = "Ativar Box ESP",
    CurrentValue = false,
    Callback = function(Value) Settings.ESP = Value end,
 })
 
-Tab:CreateToggle({
-    Name = "Linhas Centrais (Estilo Foto)",
+VisualTab:CreateToggle({
+    Name = "Linhas Centrais (Tracers)",
     CurrentValue = false,
     Callback = function(Value) Settings.Tracers = Value end,
  })
 
-Tab:CreateToggle({
+VisualTab:CreateToggle({
    Name = "Barra de Vida Quadrada Lateral",
    CurrentValue = false,
    Callback = function(Value) Settings.HealthESP = Value end,
 })
 
-Tab:CreateToggle({
+VisualTab:CreateToggle({
    Name = "Mostrar Distância",
    CurrentValue = false,
    Callback = function(Value) Settings.DistanceESP = Value end,
 })
 
-Tab:CreateSection("Movimentação / Extra")
+-- 3. Aba de Player / Extras (Nova Aba)
+local PlayerTab = Window:CreateTab("Player / Extras", 4483362458)
 
-Tab:CreateToggle({
+PlayerTab:CreateToggle({
     Name = "Noclip (Atravessar Paredes)",
     CurrentValue = false,
     Callback = function(Value) Settings.Noclip = Value end,
  })
 
-Tab:CreateToggle({
-   Name = "Infinite Jump",
+PlayerTab:CreateToggle({
+   Name = "Infinite Jump (Pulo Infinito)",
    CurrentValue = false,
    Callback = function(Value) Settings.InfiniteJump = Value end,
 })
 
-Tab:CreateToggle({
-   Name = "Spin (Giro)",
+PlayerTab:CreateToggle({
+   Name = "Spin (Giro Automático)",
    CurrentValue = false,
    Callback = function(Value) Settings.Spin = Value end,
 })
 
-Tab:CreateSection("Ajustes")
+PlayerTab:CreateSection("Ajustes de Mira")
 
-Tab:CreateSlider({
+PlayerTab:CreateSlider({
    Name = "Raio do FOV",
    Range = {50, 800},
    Increment = 10,
