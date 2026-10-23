@@ -1,0 +1,573 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "FPS GOD | Delta V3 Mobile",
+   LoadingTitle = "Carregando Funções Pro...",
+   ConfigurationSaving = {Enabled = false}
+})
+
+-- Variáveis de Configuração
+local Settings = {
+    Aimbot = false,
+    ShootLock = false, -- Grudar Apenas ao Atirar
+    AutoShot = false,
+    Tracers = false,
+    ESP = false,
+    HologramESP = false, -- ESP Holograma (Baseado em Armas)
+    HealthESP = false,
+    DistanceESP = false,
+    NoRecoil = false,
+    Noclip = false,
+    WallCheck = true,
+    FOV = 150,
+    AimPart = "Head",
+    TeamCheck = false,
+    Spin = false,
+    InfiniteJump = false,
+    PlayerCounter = false,
+    RGB_Counter = false,
+    Xray = false
+}
+
+local Camera = workspace.CurrentCamera
+local LocalPlayer = game.Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local CurrentTarget = nil 
+
+-- Sistema preciso de detecção de tiro no Mobile
+local IsShooting = false
+
+-- Detecta quando a arma está sendo ativada (tiro pressionado)
+local function MonitorTool(character)
+    if not character then return end
+    
+    character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            child.Activated:Connect(function()
+                IsShooting = true
+            end)
+            child.Deactivated:Connect(function()
+                IsShooting = false
+            end)
+        end
+    end)
+    
+    local currentTool = character:FindFirstChildOfClass("Tool")
+    if currentTool then
+        currentTool.Activated:Connect(function()
+            IsShooting = true
+        end)
+        currentTool.Deactivated:Connect(function()
+            IsShooting = false
+        end)
+    end
+end
+
+if LocalPlayer.Character then
+    MonitorTool(LocalPlayer.Character)
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    IsShooting = false
+    MonitorTool(char)
+end)
+
+-- Função para verificar se o jogador tem arma equipada na mão ou guardada nas costas
+local function HasWeaponEquippedOrOnBack(character)
+    if not character then return false end
+
+    -- 1. Verifica se tem Tool na mão do personagem
+    for _, child in pairs(character:GetChildren()) do
+        if child:IsA("Tool") then
+            return true
+        end
+    end
+
+    -- 2. Verifica no Backpack do jogador
+    local player = game.Players:GetPlayerFromCharacter(character)
+    if player and player:FindFirstChild("Backpack") and #player.Backpack:GetChildren() > 0 then
+        return true
+    end
+
+    -- 3. Verifica se tem modelo/acessório de arma nas costas ou no corpo
+    for _, part in pairs(character:GetDescendants()) do
+        if part:IsA("Model") or part:IsA("Accessory") or part:IsA("Tool") then
+            local name = part.Name:lower()
+            if name:find("gun") or name:find("rifle") or name:find("weapon") or name:find("pistol") or name:find("sword") or name:find("arma") then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+-- === SISTEMA DA MIRA ESTILO FREE FIRE ===
+local CrosshairCenter = Drawing.new("Circle")
+CrosshairCenter.Filled = true
+CrosshairCenter.Radius = 2
+CrosshairCenter.Color = Color3.fromRGB(255, 0, 0)
+CrosshairCenter.Transparency = 1
+CrosshairCenter.Visible = true
+
+local CrosshairOuter = Drawing.new("Circle")
+CrosshairOuter.Filled = false
+CrosshairOuter.Radius = 8 
+CrosshairOuter.Thickness = 1.5
+CrosshairOuter.Color = Color3.fromRGB(255, 0, 0)
+CrosshairOuter.Transparency = 0.8
+CrosshairOuter.Visible = true
+
+local function UpdateCrosshair()
+    local CenterPosition = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    CrosshairCenter.Position = CenterPosition
+    CrosshairOuter.Position = CenterPosition
+end
+-- =====================================================
+
+-- UI do Contador de Players
+local PlayerCountLabel = Drawing.new("Text")
+PlayerCountLabel.Visible = false
+PlayerCountLabel.Size = 25
+PlayerCountLabel.Center = true
+PlayerCountLabel.Outline = true
+PlayerCountLabel.Position = Vector2.new(Camera.ViewportSize.X / 2, 50)
+PlayerCountLabel.Color = Color3.fromRGB(255, 0, 0)
+
+-- Pulo Infinito
+UserInputService.JumpRequest:Connect(function()
+    if Settings.InfiniteJump then
+        local character = LocalPlayer.Character
+        if character then
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:ChangeState("Jumping")
+            end
+        end
+    end
+end)
+
+-- Loop do Noclip
+RunService.Stepped:Connect(function()
+    if Settings.Noclip and LocalPlayer.Character then
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+-- Círculo do FOV (Configurado em VERDE)
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 1.5
+FOVCircle.Color = Color3.fromRGB(0, 255, 0)
+FOVCircle.Transparency = 0.7
+FOVCircle.Filled = false
+FOVCircle.Visible = true
+
+-- Função Raio-X (Wallhack)
+local function ApplyXray()
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and not obj:IsDescendantOf(game.Players.LocalPlayer.Character) then
+            if Settings.Xray then
+                if not obj:GetAttribute("OriginalTransparency") then
+                    obj:SetAttribute("OriginalTransparency", obj.Transparency)
+                end
+                obj.Transparency = 0.5 
+            else
+                local original = obj:GetAttribute("OriginalTransparency")
+                if original then
+                    obj.Transparency = original
+                end
+            end
+        end
+    end
+end
+
+-- Sistema de WallCheck
+local function IsVisible(part, character)
+    if not Settings.WallCheck then return true end
+    
+    local Origin = Camera.CFrame.Position
+    local Direction = part.Position - Origin
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.IgnoreWater = true
+    
+    local raycastResult = workspace:Raycast(Origin, Direction, raycastParams)
+    return raycastResult == nil
+end
+
+-- Função de Validação do Alvo Atual
+local function IsValidTarget(part)
+    if not part or not part.Parent then return false end
+    local character = part.Parent
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local player = game.Players:GetPlayerFromCharacter(character)
+    
+    if humanoid and humanoid.Health > 0 then
+        if Settings.TeamCheck and player and player.Team == LocalPlayer.Team then return false end
+        local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+        local CenterScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        local distance = (Vector2.new(pos.X, pos.Y) - CenterScreen).Magnitude
+        if distance < Settings.FOV and onScreen and IsVisible(part, character) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Aimbot Inteligente com Trava (Lock)
+local function GetClosestPlayer()
+    if CurrentTarget and IsValidTarget(CurrentTarget) then
+        return CurrentTarget
+    end
+
+    local target = nil
+    local shortestDistance = math.huge
+    local CenterScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+    for _, v in pairs(game.Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(Settings.AimPart) then
+            local hum = v.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then 
+                if Settings.TeamCheck and v.Team == LocalPlayer.Team then continue end
+                local pos, onScreen = Camera:WorldToViewportPoint(v.Character[Settings.AimPart].Position)
+                local distance = (Vector2.new(pos.X, pos.Y) - CenterScreen).Magnitude
+                if distance < Settings.FOV and onScreen and IsVisible(v.Character[Settings.AimPart], v.Character) then
+                    if distance < shortestDistance then
+                        target = v.Character[Settings.AimPart]
+                        shortestDistance = distance
+                    end
+                end
+            end
+        end
+    end
+    
+    CurrentTarget = target 
+    return target
+end
+
+--- SISTEMA DE ESP COMPLETO ---
+local function CreateESP(player)
+    local Box = Drawing.new("Square")
+    Box.Visible = false
+    Box.Color = Color3.fromRGB(255, 0, 0)
+    Box.Thickness = 1.5
+    Box.Filled = false
+
+    local Tracer = Drawing.new("Line")
+    Tracer.Visible = false
+    Tracer.Color = Color3.fromRGB(255, 255, 0) 
+    Tracer.Thickness = 1.5
+
+    local HealthBox = Drawing.new("Square")
+    HealthBox.Visible = false
+    HealthBox.Thickness = 1
+    HealthBox.Color = Color3.fromRGB(0, 255, 0) 
+    HealthBox.Filled = true 
+
+    local DistanceLabel = Drawing.new("Text")
+    DistanceLabel.Visible = false
+    DistanceLabel.Color = Color3.fromRGB(255, 255, 255)
+    DistanceLabel.Size = 14
+    DistanceLabel.Center = true
+    DistanceLabel.Outline = true
+
+    local function SetupCharacter(character)
+        if not character then return end
+
+        local function Update()
+            local Connection
+            Connection = RunService.RenderStepped:Connect(function()
+                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Parent ~= nil then
+                    local Char = player.Character
+                    local RootPart = Char.HumanoidRootPart
+                    local Humanoid = Char.Humanoid
+                    local pos, onScreen = Camera:WorldToViewportPoint(RootPart.Position)
+
+                    -- Gerenciamento do ESP Holograma (Corpo e Arma)
+                    local Highlight = Char:FindFirstChild("HologramESP")
+                    local hasWeapon = HasWeaponEquippedOrOnBack(Char)
+
+                    if Settings.HologramESP and hasWeapon then
+                        if not Highlight then
+                            Highlight = Instance.new("Highlight")
+                            Highlight.Name = "HologramESP"
+                            Highlight.FillColor = Color3.fromRGB(0, 255, 255) -- Ciano Holográfico
+                            Highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                            Highlight.FillTransparency = 0.4
+                            Highlight.OutlineTransparency = 0
+                            Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                            Highlight.Adornee = Char
+                            Highlight.Parent = Char
+                        end
+                        Highlight.Enabled = true
+                    else
+                        if Highlight then
+                            Highlight.Enabled = false
+                        end
+                    end
+
+                    if onScreen then
+                        if Settings.Tracers then
+                            Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                            Tracer.To = Vector2.new(pos.X, pos.Y)
+                            Tracer.Visible = true
+                        else
+                            Tracer.Visible = false
+                        end
+
+                        local TopWorld = (RootPart.CFrame * CFrame.new(0, 3, 0)).Position
+                        local BottomWorld = (RootPart.CFrame * CFrame.new(0, -3.5, 0)).Position
+                        
+                        local TopLeft, onScreenTop = Camera:WorldToViewportPoint(TopWorld)
+                        local BottomLeft, onScreenBottom = Camera:WorldToViewportPoint(BottomWorld)
+
+                        local sizeY = math.abs(TopLeft.Y - BottomLeft.Y)
+                        local sizeX = sizeY * 0.6 
+                        local boxX = pos.X - sizeX / 2
+                        local boxY = TopLeft.Y
+
+                        if Settings.ESP then
+                            Box.Size = Vector2.new(sizeX, sizeY)
+                            Box.Position = Vector2.new(boxX, boxY)
+                            Box.Visible = true
+                        else
+                            Box.Visible = false
+                        end
+
+                        if Settings.HealthESP then
+                            local healthPercent = math.clamp(Humanoid.Health / Humanoid.MaxHealth, 0, 1)
+                            local barWidth = 3 
+                            
+                            HealthBox.Size = Vector2.new(barWidth, sizeY * healthPercent)
+                            HealthBox.Position = Vector2.new(boxX - (barWidth + 3), boxY + sizeY - (sizeY * healthPercent))
+                            HealthBox.Visible = true
+                        else
+                            HealthBox.Visible = false
+                        end
+
+                        if Settings.DistanceESP then
+                            local dist = math.floor((RootPart.Position - Camera.CFrame.Position).Magnitude)
+                            DistanceLabel.Text = "[" .. tostring(dist) .. "m]"
+                            DistanceLabel.Position = Vector2.new(pos.X, boxY - 16)
+                            DistanceLabel.Visible = true
+                        else
+                            DistanceLabel.Visible = false
+                        end
+                    else
+                        Box.Visible = false
+                        Tracer.Visible = false
+                        HealthBox.Visible = false
+                        DistanceLabel.Visible = false
+                    end
+                else
+                    Box.Visible = false
+                    Tracer.Visible = false
+                    HealthBox.Visible = false
+                    DistanceLabel.Visible = false
+                    if not player.Parent then Connection:Disconnect() end
+                end
+            end)
+        end
+        coroutine.wrap(Update)()
+    end
+
+    if player.Character then
+        SetupCharacter(player.Character)
+    end
+    player.CharacterAdded:Connect(SetupCharacter)
+end
+
+for _, v in pairs(game.Players:GetPlayers()) do
+    if v ~= LocalPlayer then CreateESP(v) end
+end
+game.Players.PlayerAdded:Connect(function(v)
+    if v ~= LocalPlayer then CreateESP(v) end
+end)
+
+-- === SISTEMA DE NO RECOIL UNIVERSAL ===
+local rawmt = getrawmetatable(game)
+local oldindex = rawmt.__index
+setreadonly(rawmt, false)
+
+rawmt.__index = newcclosure(function(self, key)
+    if Settings.NoRecoil and self == Camera and (key == "CFrame" or key == "CoordinateFrame") then
+        return oldindex(self, key)
+    end
+    return oldindex(self, key)
+end)
+setreadonly(rawmt, true)
+-- =========================================================================
+
+-- Loop Geral
+RunService.RenderStepped:Connect(function()
+    UpdateCrosshair() 
+    
+    FOVCircle.Radius = Settings.FOV
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    FOVCircle.Visible = (Settings.FOV > 0)
+
+    if Settings.PlayerCounter then
+        PlayerCountLabel.Text = "PLAYERS: " .. tostring(#game.Players:GetPlayers())
+        PlayerCountLabel.Visible = true
+        if Settings.RGB_Counter then
+            PlayerCountLabel.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
+        else
+            PlayerCountLabel.Color = Color3.fromRGB(255, 0, 0)
+        end
+    else
+        PlayerCountLabel.Visible = false
+    end
+
+    if Settings.Aimbot then
+        local canLock = true
+        if Settings.ShootLock and not IsShooting then
+            canLock = false
+        end
+
+        if canLock then
+            local target = GetClosestPlayer()
+            if target then 
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position) 
+                if Settings.AutoShot then
+                    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                    if tool then tool:Activate() end
+                end
+            else
+                CurrentTarget = nil 
+            end
+        else
+            CurrentTarget = nil
+        end
+    else
+        CurrentTarget = nil 
+    end
+
+    if Settings.Spin then
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad(50), 0)
+        end
+    end
+end)
+
+--- Interface ---
+local Tab = Window:CreateTab("Combate", 4483362458)
+
+Tab:CreateToggle({
+   Name = "Ativar Aimbot",
+   CurrentValue = false,
+   Callback = function(Value) Settings.Aimbot = Value end,
+})
+
+Tab:CreateToggle({
+   Name = "Grudar Apenas ao Atirar (ShootLock)",
+   CurrentValue = false,
+   Callback = function(Value) Settings.ShootLock = Value end,
+})
+
+Tab:CreateToggle({
+    Name = "Verificar Paredes (WallCheck)",
+    CurrentValue = true, 
+    Callback = function(Value) Settings.WallCheck = Value end,
+ })
+
+Tab:CreateToggle({
+    Name = "Tiro Automático",
+    CurrentValue = false,
+    Callback = function(Value) Settings.AutoShot = Value end,
+ })
+
+Tab:CreateToggle({
+    Name = "No Recoil",
+    CurrentValue = false,
+    Callback = function(Value) Settings.NoRecoil = Value end,
+ })
+
+Tab:CreateSection("Visual (Estilo Painel)")
+
+Tab:CreateToggle({
+    Name = "ESP Holograma (Corpo + Armas)",
+    CurrentValue = false,
+    Callback = function(Value) Settings.HologramESP = Value end,
+})
+
+Tab:CreateToggle({
+    Name = "Raio-X (Wallhack)",
+    CurrentValue = false,
+    Callback = function(Value) 
+        Settings.Xray = Value 
+        ApplyXray()
+    end,
+})
+
+Tab:CreateToggle({
+    Name = "Contador de Players",
+    CurrentValue = false,
+    Callback = function(Value) Settings.PlayerCounter = Value end,
+})
+
+Tab:CreateToggle({
+    Name = "Contador em RGB",
+    CurrentValue = false,
+    Callback = function(Value) Settings.RGB_Counter = Value end,
+})
+
+Tab:CreateToggle({
+   Name = "Ativar Box ESP",
+   CurrentValue = false,
+   Callback = function(Value) Settings.ESP = Value end,
+})
+
+Tab:CreateToggle({
+    Name = "Linhas Centrais (Estilo Foto)",
+    CurrentValue = false,
+    Callback = function(Value) Settings.Tracers = Value end,
+ })
+
+Tab:CreateToggle({
+   Name = "Barra de Vida Quadrada Lateral",
+   CurrentValue = false,
+   Callback = function(Value) Settings.HealthESP = Value end,
+})
+
+Tab:CreateToggle({
+   Name = "Mostrar Distância",
+   CurrentValue = false,
+   Callback = function(Value) Settings.DistanceESP = Value end,
+})
+
+Tab:CreateSection("Movimentação / Extra")
+
+Tab:CreateToggle({
+    Name = "Noclip (Atravessar Paredes)",
+    CurrentValue = false,
+    Callback = function(Value) Settings.Noclip = Value end,
+ })
+
+Tab:CreateToggle({
+   Name = "Infinite Jump",
+   CurrentValue = false,
+   Callback = function(Value) Settings.InfiniteJump = Value end,
+})
+
+Tab:CreateToggle({
+   Name = "Spin (Giro)",
+   CurrentValue = false,
+   Callback = function(Value) Settings.Spin = Value end,
+})
+
+Tab:CreateSection("Ajustes")
+
+Tab:CreateSlider({
+   Name = "Raio do FOV",
+   Range = {50, 800},
+   Increment = 10,
+   CurrentValue = 150,
+   Callback = function(Value) Settings.FOV = Value end,
+})
